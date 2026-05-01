@@ -113,8 +113,19 @@ def find_published_post_id(host: str, slug: str, token: str) -> str | None:
     return ((data.get("publication") or {}).get("post") or {}).get("id")
 
 
-def find_draft_id(publication_id: str, slug: str, token: str) -> str | None:
-    """Page through the publication's drafts looking for one with this slug."""
+def find_draft_id_by_title(publication_id: str, title: str, token: str) -> str | None:
+    """Find a draft on this publication whose title matches.
+
+    Hashnode's schema declares Draft.slug as non-nullable, but the API will
+    happily return drafts with a null slug (drafts created in the editor
+    without an explicit slug). Querying `slug` on the drafts list therefore
+    fails the entire response with INTERNAL_SERVER_ERROR if any draft on
+    the page has no slug. Match on title instead — it's always populated.
+
+    Caveat: if the post's title in frontmatter changes between pushes, this
+    won't find the previous draft and will create a new one. Same trade-off
+    CLAUDE.md already calls out for slug renames.
+    """
     cursor: str | None = None
     while True:
         data = gql(
@@ -122,7 +133,7 @@ def find_draft_id(publication_id: str, slug: str, token: str) -> str | None:
             query($id: ObjectId!, $after: String) {
               publication(id: $id) {
                 drafts(first: 50, after: $after) {
-                  edges { node { id slug } }
+                  edges { node { id title } }
                   pageInfo { hasNextPage endCursor }
                 }
               }
@@ -134,7 +145,7 @@ def find_draft_id(publication_id: str, slug: str, token: str) -> str | None:
         conn = (data.get("publication") or {}).get("drafts") or {}
         for edge in conn.get("edges") or []:
             node = edge.get("node") or {}
-            if node.get("slug") == slug:
+            if node.get("title") == title:
                 return node.get("id")
         info = conn.get("pageInfo") or {}
         if not info.get("hasNextPage"):
@@ -221,7 +232,7 @@ def sync_one(path: Path, host: str, token: str) -> None:
         update_post(post_id, fm, body, token)
         return
 
-    draft_id = find_draft_id(pub_id, slug, token)
+    draft_id = find_draft_id_by_title(pub_id, fm["title"], token)
 
     if save_as_draft:
         if draft_id:
