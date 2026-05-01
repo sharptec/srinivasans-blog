@@ -1,0 +1,81 @@
+name: Publish to Hashnode
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.md"
+      - "!CLAUDE.md"
+      - "!IDEAS.md"
+      - "!README.md"
+      - "scripts/sync-to-hashnode.py"
+      - ".github/workflows/publish-to-hashnode.yml"
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Specific .md file to sync (leave blank to sync all posts)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Determine files to sync
+        id: files
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "${{ inputs.file }}" ]]; then
+              printf '%s\n' "${{ inputs.file }}" > to_sync.txt
+            else
+              find . -maxdepth 1 -name '*.md' -type f -printf '%f\n' \
+                | grep -vE '^(CLAUDE|IDEAS|README)\.md$' \
+                > to_sync.txt || true
+            fi
+          else
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              git diff --name-only HEAD~1 HEAD -- '*.md' > to_sync.txt || true
+            else
+              git ls-tree --name-only -r HEAD -- '*.md' > to_sync.txt || true
+            fi
+            grep -vE '^(CLAUDE|IDEAS|README)\.md$' to_sync.txt > filtered.txt || true
+            mv filtered.txt to_sync.txt
+          fi
+          echo "Files to sync:"
+          cat to_sync.txt || true
+          {
+            echo 'files<<EOF'
+            cat to_sync.txt
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        if: steps.files.outputs.files != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: steps.files.outputs.files != ''
+        run: pip install --quiet requests pyyaml
+
+      - name: Sync to Hashnode
+        if: steps.files.outputs.files != ''
+        env:
+          HASHNODE_TOKEN: ${{ secrets.HASHNODE_TOKEN }}
+          HASHNODE_HOST: srinivasans.hashnode.dev
+        run: |
+          while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            echo "::group::sync $f"
+            python scripts/sync-to-hashnode.py "$f"
+            echo "::endgroup::"
+          done <<< "${{ steps.files.outputs.files }}"
