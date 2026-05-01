@@ -31,6 +31,7 @@ Half-formed and well-formed ideas that haven’t been picked yet. Entries here m
 - **Supabase Edge Function gotchas in production.** `onConflict` requiring an explicit unique constraint; service role key bypassing REST permission issues that persist with RLS off; the `files: []` parameter requiring actual file content for new function deployments.
 - **AI email triage with a precision gate before automation.** Three-phase architecture (classify → review → auto-acknowledge). Why a 90% precision threshold over 200+ reviewed emails before activating auto-response. How the confusion matrix shaped the design.
 - **The Vercel + GitHub committer-email gotcha that breaks Hobby tier deploys.** Short, sharp post: commits authored with an email not linked to the GitHub account silently fail to deploy.
+- **How a 4-person product team evaluates LLM features — 200 emails, a spreadsheet, a confusion matrix.** Methodological companion to the email-triage post: less about the feature, more about the eval set itself. Manual labelling pass, the spreadsheet schema, where the precision/recall tradeoff lands when a false positive reaches a customer, what to skip (BLEU/ROUGE for classification work). *Note: significant overlap with the email-triage piece — only draft this if the triage post stays narrowly narrative and leaves the methodology unsaid.*
 
 ### Bigger ideas (need shape before drafting)
 
