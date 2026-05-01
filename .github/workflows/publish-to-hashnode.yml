@@ -20,6 +20,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -41,8 +44,10 @@ jobs:
                 > to_sync.txt || true
             fi
           else
+            # --diff-filter=ACMR excludes deletions (D) so removing a post
+            # from the repo doesn't make the script try to sync a missing file.
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
-              git diff --name-only HEAD~1 HEAD -- '*.md' > to_sync.txt || true
+              git diff --name-only --diff-filter=ACMR HEAD~1 HEAD -- '*.md' > to_sync.txt || true
             else
               git ls-tree --name-only -r HEAD -- '*.md' > to_sync.txt || true
             fi
