@@ -1,6 +1,6 @@
 # Blog: srinivasans.hashnode.dev
 
-This repo is the source for **srinivasans.hashnode.dev**. Hashnode is connected via the official *Publish from GitHub* integration — Markdown files committed to the repo root with valid frontmatter auto-publish (or auto-update) on the Hashnode blog within ~30–60 seconds.
+This repo is the source for **srinivasans.hashnode.dev**. Posts are synced to Hashnode by a GitHub Actions workflow (`.github/workflows/publish-to-hashnode.yml`) that calls Hashnode's GraphQL API on every push to `main`. The Hashnode "GitHub Backup" integration is also installed on the publication — that's a one-way push *from* Hashnode *to* GitHub for backup, and is unrelated to the publishing path used here.
 
 You (Claude Code) are expected to act as both the **writing partner** and the **publishing pipeline**: brainstorming, outlining, drafting, refining, and finally committing the post. The author drives strategy and tone; you handle the mechanics.
 
@@ -8,11 +8,19 @@ You (Claude Code) are expected to act as both the **writing partner** and the **
 
 ## How Hashnode publishing works
 
-- Hashnode watches **only the root of this repo**. Markdown files in subfolders are ignored. Do not create a `posts/` folder.
+- Posts are Markdown files at the **root of the repo** (no `posts/` folder). The workflow ignores `CLAUDE.md`, `IDEAS.md`, and `README.md`.
 - The filename should match the slug (e.g., `my-post-slug.md` ↔ `slug: my-post-slug`).
-- A commit with valid frontmatter publishes or updates the post.
-- Slug + filename together identify the post. Renaming a file = new post. **Don’t rename committed files unless that’s intentional.**
-- Hashnode respects a **maximum of 10 file changes per commit**.
+- A push to `main` triggers `.github/workflows/publish-to-hashnode.yml`, which runs `scripts/sync-to-hashnode.py` for each changed `.md` file.
+- The script looks the post up in Hashnode by `slug`:
+  - If a published post exists → `updatePost` (edits in place).
+  - Else if a draft exists → `updateDraft`.
+  - Else → `createDraft`.
+  - If `saveAsDraft: false` and the post isn't yet published → `publishDraft`.
+- A `workflow_dispatch` trigger is also wired up: run the workflow manually from the **Actions** tab to (a) re-sync every post when no input is given, or (b) sync a single file when the `file` input is set.
+- **Iteration only happens on pushes to `main`.** Edits on a feature branch don't sync until merged. Each round-trip (draft → review → publish) = one commit on `main`.
+- **Edits made directly in the Hashnode editor will be overwritten** by the next push, since the script treats the repo as the source of truth. Iterate by committing, not by editing on Hashnode.
+- Slug + filename together identify the post. Renaming a file = new post on Hashnode. **Don't rename committed files unless that's intentional.**
+- The script requires the `HASHNODE_TOKEN` repo secret (a Hashnode personal access token) and the `HASHNODE_HOST` env var (set in the workflow to `srinivasans.hashnode.dev`). If a workflow run fails, the GitHub Actions log shows the exact GraphQL error — there is no Hashnode-side "View logs" panel for this path.
 
 -----
 
@@ -25,24 +33,30 @@ Every post must begin with:
 title: <Post title>
 slug: <unique-url-slug-matching-filename>
 tags: <up-to-5-comma-separated-tag-slugs>
-domain: srinivasans.hashnode.dev
 saveAsDraft: true    # default for new posts; flip to false to publish
 ---
 ```
 
-### Optional fields worth using
+### Optional fields supported by the sync script today
 
 - `subtitle:` — recommended; shown below the title on the post page.
-- `enableToc: true` — generates a table of contents, useful for posts with 4+ sections.
-- `seoTitle:` and `seoDescription:` — override title/description for search engines if needed.
-- `canonical:` — original URL when cross-posting from elsewhere.
-- `coverImage:` — must be uploaded to Hashnode’s CDN first via https://hashnode.com/uploader. Skip this for most posts; it’s a fiddly step.
+
+### Optional fields not yet wired up in the sync script
+
+These are accepted by Hashnode in principle, but `scripts/sync-to-hashnode.py` does not currently send them. Adding one means extending the script's `build_input()`. Don't include them in posts until they're wired up — they'll just be silently ignored.
+
+- `enableToc: true` — table of contents.
+- `seoTitle:` / `seoDescription:` — search-engine overrides.
+- `canonical:` — original URL when cross-posting.
+- `coverImage:` — must be uploaded to Hashnode's CDN first via https://hashnode.com/uploader.
+- `domain:` — historically used by Hashnode's "Publish from GitHub" integration. Ignored by the script (host comes from `HASHNODE_HOST` in the workflow).
 
 ### Tag slug rules
 
 - Maximum 5 tags.
-- Tag slugs must be valid Hashnode tags. The canonical list lives at https://github.com/Hashnode/support/blob/main/misc/tags.json — when in doubt, check it. Common safe ones for this blog: `aws`, `azure`, `oracle-cloud`, `docker`, `devops`, `self-hosting`, `arm64`, `rag`, `embeddings`, `ai`, `voyage-ai`, `supabase`, `nextjs`, `vercel`, `aspnet`, `vbnet`, `sql-server`.
-- If a commit fails, an invalid tag slug is the most common reason — check the Hashnode “View logs” panel.
+- Tag slugs must be valid Hashnode tags. The canonical list lives at https://github.com/Hashnode/support/blob/main/misc/tags.json — when in doubt, check it. Common safe ones for this blog: `aws`, `azure`, `oracle-cloud`, `docker`, `devops`, `self-hosting`, `arm64`, `ai`, `machine-learning`, `software-engineering`, `automation`, `nextjs`, `vercel`, `aspnet`, `vbnet`, `sql-server`. (Note: `rag`, `embeddings`, `voyage-ai`, `supabase`, `llm`, and `llms` are *not* in the canonical list as of the last check — verify before using.)
+- The sync script converts the comma-separated slug list into Hashnode's expected `[{slug, name}]` shape. Names are derived from slugs with a small override table for known acronyms (AI, ML, AWS, etc.) — see `_TAG_NAME_OVERRIDES` in `scripts/sync-to-hashnode.py`.
+- If a workflow run fails, an invalid tag slug is the most common reason — check the GitHub Actions run log.
 
 -----
 

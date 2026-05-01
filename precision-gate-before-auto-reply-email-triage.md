@@ -3,8 +3,6 @@ title: Why I Waited for 90% Precision Over 200 Emails Before Letting the Bot Aut
 subtitle: Building an LLM eval without an ML org — and why precision, not accuracy, was the gate that actually mattered.
 slug: precision-gate-before-auto-reply-email-triage
 tags: ai, machine-learning, software-engineering, automation
-domain: srinivasans.hashnode.dev
-enableToc: true
 saveAsDraft: true
 ---
 
