@@ -195,6 +195,12 @@ def publish_draft(draft_id: str, token: str) -> str:
 
 def sync_one(path: Path, host: str, token: str) -> None:
     fm, body = parse_post(path)
+    if fm.get("cuid"):
+        print(
+            f"  [{path.name}] has a 'cuid' field — looks like a file written by "
+            "Hashnode's Backup integration. Skipping to avoid a sync loop."
+        )
+        return
     for required in ("title", "slug"):
         if not fm.get(required):
             raise ValueError(f"{path}: frontmatter missing required field '{required}'")
